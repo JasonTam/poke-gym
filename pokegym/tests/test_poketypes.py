@@ -95,3 +95,33 @@ def test_dmg_stab_effective():
     dmg_c = move_c.get_dmg(attacker, defender)
     assert dmg_f == 10
     assert dmg_c == 59
+
+
+def test_dmg_nostab_effective():
+    attacker = Monster(
+        species=POKEMON.HYPNO,
+        level=25,
+        atk_iv=15,
+        def_iv=15,
+        stm_iv=15,
+        move_fast=None,
+        move_charge_1=None,
+        move_charge_2=None,
+    )
+
+    defender = Monster(
+        species=POKEMON.CHANSEY,
+        level=40,
+        atk_iv=15,
+        def_iv=15,
+        stm_iv=15,
+        move_fast=None,
+        move_charge_1=None,
+        move_charge_2=None,
+    )
+
+    move_c = MOVES.FOCUS_BLAST
+
+    dmg_c = move_c.get_dmg(attacker, defender)
+
+    assert dmg_c == 147
