@@ -64,3 +64,34 @@ def test_3stage_ineffective_hardcode():
 
     assert (e - 0.24) < 0.01
 
+
+def test_dmg_stab_effective():
+    attacker = Monster(
+        species=POKEMON.MACHAMP,
+        level=10,
+        atk_iv=15,
+        def_iv=15,
+        stm_iv=15,
+        move_fast=None,
+        move_charge_1=None,
+        move_charge_2=None,
+    )
+
+    defender = Monster(
+        species=POKEMON.CHANSEY,
+        level=40,
+        atk_iv=15,
+        def_iv=15,
+        stm_iv=15,
+        move_fast=None,
+        move_charge_1=None,
+        move_charge_2=None,
+    )
+
+    move_f = MOVES.COUNTER_FAST
+    move_c = MOVES.CROSS_CHOP
+
+    dmg_f = move_f.get_dmg(attacker, defender)
+    dmg_c = move_c.get_dmg(attacker, defender)
+    assert dmg_f == 10
+    assert dmg_c == 59

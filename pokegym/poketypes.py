@@ -17,6 +17,9 @@ class DefenseType:
     def __hash__(self):
         return self.name.__hash__()
 
+    def __eq__(self, other):
+        return self.name.__eq__(other.name)
+
 
 class AttackType:
     # TODO: Maybe just a PokeType class
@@ -30,6 +33,12 @@ class AttackType:
 
     def __repr__(self):
         return self.name
+
+    def __hash__(self):
+        return self.name.__hash__()
+
+    def __eq__(self, other):
+        return self.name.__eq__(other.name)
 
 
 attack_types = {}

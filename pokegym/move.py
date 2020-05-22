@@ -2,8 +2,8 @@ import math
 from dataclasses import dataclass
 from typing import Set, Dict, Optional, TYPE_CHECKING
 
-from pokegym.gamemaster import moves_raw_d
-from pokegym.constants import STAB_MULT, EFFECTIVE_BASE
+from pokegym.gamemaster import moves_raw_d, combat_settings_d
+from pokegym.constants import EFFECTIVE_BASE
 if TYPE_CHECKING:
     from pokegym.mon import Monster
 from pokegym.poketypes import AttackType, attack_types
@@ -78,8 +78,9 @@ class Move:
         https://gamepress.gg/pokemongo/damage-mechanics
         """
         # STAB [Same Type Attack Bonus]
+        stab_mult = combat_settings_d['sameTypeAttackBonusMultiplier']
         stab = (
-            STAB_MULT if self.type_atk in attacker.species.types
+            stab_mult if self.type_atk in attacker.species.types
             else 1.0
         )
 
@@ -93,6 +94,9 @@ class Move:
             * attacker.atk_tot / defender.def_tot
             * stab
             * effectiveness
+            # TODO: use chargeAttackBonusMultiplier when charge
+            #   well, they're both 1.3 for now
+            * combat_settings_d['fastAttackBonusMultiplier']
         ) + 1
         return dmg
 

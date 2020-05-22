@@ -2,9 +2,8 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Set, Optional, Dict
 
-from pokegym.gamemaster import pokemon_raw_d
+from pokegym.gamemaster import pokemon_raw_d, level_to_cpm
 from pokegym.poketypes import DefenseType, defense_types
-from pokegym.constants import level_to_cpm
 from pokegym.move import FastMove, ChargeMove
 
 
