@@ -100,17 +100,24 @@ class Move:
         ) + 1
         return dmg
 
+    @property
+    def turns(self) -> int:
+        return self.duration + 1
 
+
+@dataclass
 class FastMove(Move):
-    # TODO: ?
     pass
 
 
+@dataclass
 class ChargeMove(Move):
-    # TODO: ?
     pass
 
 
 MOVES = AttrDict()
 for k, v in moves_raw_d.items():
-    MOVES[k] = Move.from_dict(v)
+    if k.endswith('_FAST'):
+        MOVES[k] = FastMove.from_dict(v)
+    else:
+        MOVES[k] = ChargeMove.from_dict(v)

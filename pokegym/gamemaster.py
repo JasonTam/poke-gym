@@ -1,7 +1,7 @@
 import requests
 import json
 import re
-
+from typing import Dict
 from pathlib import Path
 
 CUR_DIR = Path(__file__).parent
@@ -21,9 +21,9 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-pokemon_raw_d = {}
-moves_raw_d = {}
-combat_settings_d = {}
+pokemon_raw_d: Dict[str, Dict] = {}
+moves_raw_d: Dict[str, Dict] = {}
+combat_settings_d: Dict[str, Dict] = {}
 
 
 for template in gmdata["itemTemplate"]:

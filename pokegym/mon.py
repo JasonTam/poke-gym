@@ -86,6 +86,7 @@ class Monster:
 
     def __post_init__(self):
         # In-battle Attributes
+        # TODO: maybe make a clipped integer type for energy
         self.energy = 0  # assert in range(100+1)
         self.debuffs = []
         self.hp_cur: int = self.stm_tot
