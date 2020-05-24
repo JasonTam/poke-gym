@@ -53,8 +53,8 @@ class Battle:
         #   need to queue the damage.....
         #   The current implementation here is not correct
         for i in range(3):
-            cur_p_actions = [a for a in self.stored_actions
-                             if a.priority == i]
+            cur_p_actions: List[QAction] = [a for a in self.stored_actions
+                                            if a.priority == i]
             self.stored_actions = [a for a in self.stored_actions
                                    if a.priority != i]
             if i == 0:
@@ -65,12 +65,18 @@ class Battle:
                     if isinstance(a.action, FastMove):
                         self.attack_queue.append(a)
             elif i == 2:
-                if len(cur_p_actions) > 1:
+                # Check energy requirements for charge moves met
+                valid_actions: List[QAction] = [
+                    a for a in cur_p_actions
+                    if a.player.mon_cur.energy >= abs(a.action.energy)]
+                # TODO: might need cur_p_actions = everything that wasnt valid
+                if len(valid_actions) > 1:
                     # Resolve CMP ties for charge moves
                     atk_stats = [p.current_mon.atk_tot for p in self.players]
-                    for _, a in sorted(zip(atk_stats, cur_p_actions)):
-                        # TODO: lol... is this even remotely correct??
-                        self.attack_queue.append(a)
+                    _, valid_actions = sorted(zip(atk_stats, valid_actions))
+
+                for a in valid_actions:
+                    self.attack_queue.append(a)
 
         for qa in self.attack_queue:
             qa.turns_elapsed += 1
@@ -92,6 +98,7 @@ class Battle:
             defender = self.get_other_player(qa.player).mon_cur
             move = qa.action
             # Apply Damage
+            # TODO: Pass in charge amount if charge move
             dmg = move.get_dmg(attacker, defender)
             defender.hp_cur -= dmg
             # Reward Energy

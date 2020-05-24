@@ -77,6 +77,8 @@ class Move:
         """
         https://gamepress.gg/pokemongo/damage-mechanics
         """
+        # TODO: handle charge amount
+
         # STAB [Same Type Attack Bonus]
         stab_mult = combat_settings_d['sameTypeAttackBonusMultiplier']
         stab = (

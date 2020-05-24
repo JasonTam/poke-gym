@@ -36,6 +36,7 @@ class Player:
         b.store_action(self, self.mon_cur.move_fast, 1)
 
     def apply_charge_move_1(self, b: 'Battle'):
+        # TODO: charge_amt parameter, for now, always excellent
         b.store_action(self, self.mon_cur.move_charge_1, 2)
 
     def apply_charge_move_2(self, b: 'Battle'):
