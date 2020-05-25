@@ -34,9 +34,11 @@ class Battle:
         self.attack_queue: List[QAction] = []
 
     def store_action(self, p: Player, action, priority: int):
-        ind = self.players.index(p)
-
-        self.stored_actions.append(QAction(p, action, priority, 0))
+        # Cannot store action if in the middle of a fast attack
+        if any(a.player == p for a in self.attack_queue):
+            return
+        else:
+            self.stored_actions.append(QAction(p, action, priority, 0))
 
     def resolve_actions(self):
         """Logic for resolving actions in correct order

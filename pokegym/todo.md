@@ -1,7 +1,6 @@
 
 # TODO
 
-- [ ] Invalidate all actions for duration of fast attack
 - [ ] Implement timer
 - [ ] Handle Charge amount
 - [ ] (De)Buffs
@@ -17,4 +16,10 @@
     the mon you previously had out, or the one you swapped to?
  
  
-     
+Observations:
+- Number of shields (both players)
+- Known mons (moves when used)
+- Mons left
+- Time left
+- Switch clocks (both players)
+- Flag -- waiting for fast turn to finish
