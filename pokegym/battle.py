@@ -14,6 +14,7 @@ DURATION_MINIGAME_SEC = combat_settings_d['minigameDurationSeconds']
 
 @dataclass
 class QAction:
+    """Queue-able Action"""
     player: Player
     action: Any  # TODO: Could be more specific
     priority: int
@@ -52,19 +53,19 @@ class Battle:
         # TODO: actually, the fast move is kind of complicated
         #   need to queue the damage.....
         #   The current implementation here is not correct
-        for i in range(3):
+        for priority_lvl in range(3):
             cur_p_actions: List[QAction] = [a for a in self.stored_actions
-                                            if a.priority == i]
+                                            if a.priority == priority_lvl]
             self.stored_actions = [a for a in self.stored_actions
-                                   if a.priority != i]
-            if i == 0:
+                                   if a.priority != priority_lvl]
+            if priority_lvl == 0:
                 for a in cur_p_actions:
                     a.action()
-            elif i == 1:
+            elif priority_lvl == 1:
                 for a in cur_p_actions:
                     if isinstance(a.action, FastMove):
                         self.attack_queue.append(a)
-            elif i == 2:
+            elif priority_lvl == 2:
                 # Check energy requirements for charge moves met
                 valid_actions: List[QAction] = [
                     a for a in cur_p_actions
@@ -103,6 +104,7 @@ class Battle:
             defender.hp_cur -= dmg
             # Reward Energy
             attacker.energy += move.energy
+            attacker.energy = min(100, attacker.energy)
 
     @property
     def is_done(self):
@@ -130,6 +132,14 @@ class Battle:
             hp_tots = [sum(m.hp_cur for m in p.mons) for p in self.players]
             ind = hp_tots[0] < hp_tots[1]
             return self.players[ind]
+
+    def reset(self):
+        for p in self.players:
+            p.reset()
+
+        self.turn = 0
+        self.stored_actions = []
+        self.attack_queue = []
 
 
 

@@ -137,4 +137,8 @@ class Monster:
     def attack_charge_2(self, other: 'Monster'):
         return self.attack_charge(self.move_charge_2, other)
 
+    def reset(self):
+        self.__post_init__()
+
+
 

@@ -60,3 +60,10 @@ class Player:
     def apply_wait(self, b: 'Battle'):
         b.store_action(self, lambda: None, 0)
 
+    def reset(self):
+        for mon in self.mons:
+            mon.reset()
+        self.n_shields = 2
+        self.swap_cd = 0
+        self.mon_cur = self.mons[0]
+

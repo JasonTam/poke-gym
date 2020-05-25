@@ -1,8 +1,9 @@
 
 # TODO
 
+- [ ] Invalidate all actions for duration of fast attack
+- [ ] Implement timer
 - [ ] Handle Charge amount
-- [ ] CMP Tie Logic
 - [ ] (De)Buffs
 - [ ] Handle faints
     - do queued fast moves get removed?
