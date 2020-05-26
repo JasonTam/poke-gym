@@ -121,8 +121,18 @@ def test_charge_move():
     p0.apply_charge_move_1(b)
     b.resolve_actions()
 
+    # Nothing happened yet because of state change
+    # values should be the same
+    assert p0.mon_cur.energy == 75
+    assert p1.mon_cur.hp_cur == hp_before_cm_1
+
+    # Now we need input for attacker charge amt and defender shield
+    p1.apply_shield()
+    # TODO: p0 charge amount
+    b.resolve_actions()
     assert p0.mon_cur.energy == 75 - 65
-    assert p1.mon_cur.hp_cur == hp_before_cm_1 - 73
+    # 1 dmg b/c it was shielded
+    assert p1.mon_cur.hp_cur == hp_before_cm_1 - 1
 
 
 def test_charge_cmp_tie():
@@ -156,7 +166,22 @@ def test_charge_cmp_tie():
     p1.apply_charge_move_1(b)
     b.resolve_actions()
 
+    p0.apply_shield()
+    # TODO: p1 charge amount
+    b.resolve_actions()
+
+    assert p0.mon_cur.hp_cur == 112
+    assert p1.mon_cur.hp_cur == 113
+
+    # TODO: p0 charge amount
+    # p1 does not shield
+    b.resolve_actions()
+
+    assert p0.mon_cur.hp_cur == 112
+    assert p1.mon_cur.hp_cur == 113 - 27
+
 
 if __name__ == '__main__':
     test_fast_move_duration()
     test_charge_move()
+    test_charge_cmp_tie()

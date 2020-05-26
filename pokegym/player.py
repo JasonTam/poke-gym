@@ -16,6 +16,7 @@ class Player:
         self.n_shields = 2
         self.swap_cd = 0
         self.mon_cur: Monster = self.mons[0]
+        self.shield_out: bool = False
 
     def swap(self, ind: int):
         if self.mons[ind].hp_cur > 0:
@@ -59,6 +60,11 @@ class Player:
 
     def apply_wait(self, b: 'Battle'):
         b.store_action(self, lambda: None, 0)
+
+    def apply_shield(self):
+        if self.n_shields > 0:
+            self.n_shields -= 1
+            self.shield_out = True
 
     def reset(self):
         for mon in self.mons:

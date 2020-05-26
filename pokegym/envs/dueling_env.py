@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
@@ -6,7 +7,7 @@ from gym.utils import seeding
 from pokegym.player import Player
 from pokegym.mon import Monster, POKEMON
 from pokegym.move import MOVES
-from pokegym.battle import Battle
+from pokegym.battle import Battle, BattleState, CHARGE_STATES
 
 
 def make_registeel():
@@ -16,8 +17,10 @@ def make_registeel():
         atk_iv=8,
         def_iv=15,
         stm_iv=13,
-        move_fast=MOVES.METAL_CLAW_FAST,
-        move_charge_1=MOVES.FLASH_CANNON,
+        move_fast=MOVES.LOCK_ON_FAST,
+        # move_fast=MOVES.METAL_CLAW_FAST,
+        # move_charge_1=MOVES.FLASH_CANNON,
+        move_charge_1=MOVES.CROSS_POISON,
         move_charge_2=MOVES.FOCUS_BLAST,
     )
     return registeel
@@ -26,11 +29,12 @@ def make_registeel():
 class DuelingEnv(gym.Env):
     """
 
-    Simplified Actions:
+    Actions:
     0: Fast Attack
     1: Charge Move 1
     2: Charge Move 2
     3: Do Nothing
+    4: Use Shield
     """
     metadata = {'render.modes': ['console']}
 
@@ -42,7 +46,7 @@ class DuelingEnv(gym.Env):
         self.player_0 = Player(mons=[make_registeel()])
         self.player_1 = Player(mons=[make_registeel()])
         self.battle = Battle(players=[self.player_0, self.player_1])
-        self.action_space = spaces.Discrete(4)
+        self.action_space = spaces.Discrete(5)
 
         # From perspective of player_0
         # Partially observed space of what player_1 has shown to us already
@@ -50,8 +54,8 @@ class DuelingEnv(gym.Env):
         # HACK: (B/C baseline models don't support Dict/Tuple)
         # Enemy HP, Energy -- both unit normalized
         self.observation_space = spaces.Box(
-            low=np.array([0., 0., 0., 0.]),
-            high=np.array([1., 1., 1., 1.]),
+            low=np.array([0.] * 9),
+            high=np.array([1.] * 9),
             dtype=np.float32,
         )
 
@@ -61,24 +65,39 @@ class DuelingEnv(gym.Env):
         Kept as 2 dimensional to easily flip perspective
         with np.flip(..., axis=1)
         """
-        p0_mon = self.player_0.mon_cur
-        p1_mon = self.player_1.mon_cur
+        ps = self.battle.players
+        mons = [p.mon_cur for p in ps]
+        hp_rats = [mon.hp_cur / mon.stm_tot for mon in mons]
+        nrg = [mon.energy / 100. for mon in mons]
 
-        p0_hp_rat = p0_mon.hp_cur / p0_mon.stm_tot
-        p1_hp_rat = p1_mon.hp_cur / p1_mon.stm_tot
-
-        p0_nrg = p0_mon.energy / 100.
-        p1_nrg = p1_mon.energy / 100.
+        charge_state_ohe = [self.battle.state == s for s in CHARGE_STATES]
+        n_shields = [p.n_shields / 2. for p in ps]
 
         obs_perspective = np.array([
-            [p0_hp_rat, p1_hp_rat],
-            [p0_nrg, p1_nrg],
+            hp_rats,
+            nrg,
+            n_shields,
+            charge_state_ohe,
         ], dtype=np.float16)
-        # TODO: charge move state needs to be here too ^
 
-        obs_global = np.array([])
+        obs_global = np.array([
+            self.battle.state == BattleState.BATTLE,
+        ])
 
-        return obs_perspective
+        return obs_perspective, obs_global
+
+    def _observations(self):
+        com_persp_obs, com_global_obs = self._observations_common()
+        p0_obs = np.concatenate([
+            com_persp_obs.flatten(),
+            com_global_obs,
+        ], axis=0)
+        p1_obs = np.concatenate([
+            np.flip(com_persp_obs, axis=1).flatten(),
+            com_global_obs,
+        ], axis=0)
+
+        return p0_obs, p1_obs
 
     def step(self, p0_action):
 
@@ -92,6 +111,8 @@ class DuelingEnv(gym.Env):
                 p.apply_charge_move_2(self.battle)
             elif action == 3:
                 p.apply_wait(self.battle)
+            elif action == 4:
+                p.apply_shield()
 
         o_hp_0 = self.player_1.mon_cur.hp_cur
         p_nrg_0 = self.player_0.mon_cur.energy
@@ -99,9 +120,7 @@ class DuelingEnv(gym.Env):
         o_hp_1 = self.player_1.mon_cur.hp_cur
         p_nrg_1 = self.player_0.mon_cur.energy
 
-        common_obs = self._observations_common()
-        p0_obs = common_obs.flatten()
-        p1_obs = np.flip(common_obs, axis=1).flatten()
+        p0_obs, p1_obs = self._observations()
 
         done = self.battle.is_done
 
@@ -129,9 +148,7 @@ class DuelingEnv(gym.Env):
     def reset(self):
         self.battle.reset()
 
-        common_obs = self._observations_common()
-        p0_obs = common_obs.flatten()
-        p1_obs = np.flip(common_obs, axis=1).flatten()
+        p0_obs, p1_obs = self._observations()
 
         # This is our opponent's move for next turn
         self.p1_action, _ = self.p1_agent.predict(p1_obs)
@@ -159,40 +176,56 @@ class DuelingEnv(gym.Env):
 if __name__ == '__main__':
     from stable_baselines.common.env_checker import check_env
     from stable_baselines import DQN, PPO2, A2C, ACKTR
+    from pathlib import Path
+
+    PATH_SAVE = './saved/shit.p'
 
     class ShittyAgent:
         def predict(self, obs):
-            return np.random.randint(4), None
+            return np.random.randint(5), None
 
-    # opponent = ShittyAgent()
-    opponent = ACKTR.load('./saved/shit.p')
+    for epoch in range(10):
+        print('*' * 60)
+        print(f'EPOCH {epoch}')
+        print('*' * 60)
 
-    env = DuelingEnv(opponent)
+        if Path(PATH_SAVE).exists():
+            print('Loading saved model')
+            opponent = ACKTR.load(PATH_SAVE)
+        else:
+            print('No model found, using random agent')
+            opponent = ShittyAgent()
 
-    check_env(env, warn=True)
+        env = DuelingEnv(opponent)
 
-    # Train the agent
-    model = ACKTR('MlpPolicy', env, verbose=1).learn(50_000)
+        check_env(env, warn=True)
 
-    # Test the trained agent
-    obs = env.reset()
-    n_steps = 300
-    action_history = []
-    for step in range(n_steps):
-        action, _ = model.predict(obs, deterministic=True)
-        action_history.append(action)
-        print("Step {}".format(step + 1))
-        print(f"P0_Action: {action} \t P1_Action: {env.p1_action}")
-        obs, reward, done, info = env.step(action)
-        print('obs=', obs, 'reward=', reward, 'done=', done)
-        env.render(mode='console')
-        if done:
-            # Note that the VecEnv resets automatically
-            # when a done signal is encountered
-            print("Goal reached!", "reward=", reward)
-            break
+        # Train the agent
+        model = ACKTR('MlpPolicy', env, verbose=0).learn(20_000)
 
-    print('*' * 40)
-    print('Action History')
-    print(action_history)
+        # Test the trained agent
+        obs = env.reset()
+        n_steps = 300
+        action_history = []
+        for step in range(n_steps):
+            action, _ = model.predict(obs, deterministic=True)
+            action_history.append(action)
+            print("Step {}".format(step + 1))
+            print(f"P0_Action: {action} \t P1_Action: {env.p1_action}")
+            obs, reward, done, info = env.step(action)
+            print('obs=', obs, 'reward=', reward, 'done=', done)
+            env.render(mode='console')
+            if done:
+                # Note that the VecEnv resets automatically
+                # when a done signal is encountered
+                print("Goal reached!", "reward=", reward)
+                break
+
+        print('*' * 40)
+        print('Action History')
+        print(action_history)
+
+        print('Saving Model')
+        model.save(PATH_SAVE)
+
 

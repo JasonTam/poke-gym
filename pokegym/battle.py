@@ -31,6 +31,12 @@ class BattleState(Enum):
     # P1_SWAP_CHOICE = 4
 
 
+CHARGE_STATES = [
+    BattleState.P0_CHARGE_ATK,
+    BattleState.P1_CHARGE_ATK,
+]
+
+
 class Battle:
 
     def __init__(self, players=List[Player]):
@@ -63,47 +69,49 @@ class Battle:
 
         # TODO: this is messy AF
 
+        if self.state == BattleState.BATTLE:
+            for priority_lvl in range(3):
+                cur_p_actions: List[QAction] = [a for a in self.stored_actions
+                                                if a.priority == priority_lvl]
+                self.stored_actions = [a for a in self.stored_actions
+                                       if a.priority != priority_lvl]
+                if priority_lvl == 0:
+                    for a in cur_p_actions:
+                        a.action()
+                elif priority_lvl == 1:
+                    for a in cur_p_actions:
+                        if isinstance(a.action, FastMove):
+                            self.attack_queue.append(a)
+                elif priority_lvl == 2:
+                    # Check energy requirements for charge moves met
+                    valid_actions: List[QAction] = [
+                        a for a in cur_p_actions
+                        if a.player.mon_cur.energy >= abs(a.action.energy)]
 
+                    if len(valid_actions) > 1:
+                        # Resolve CMP ties for charge moves
+                        atk_stats = [p.mon_cur.atk_tot for p in self.players]
+                        if atk_stats[0] == atk_stats[1]:
+                            # If attack stats are the same, random tie-breaker
+                            sort_by = [0, 1]
+                            random.shuffle(sort_by)
+                        else:
+                            sort_by = atk_stats
+                        _, valid_actions = zip(*sorted(
+                            zip(sort_by, valid_actions)))
 
-
-        for priority_lvl in range(3):
-            cur_p_actions: List[QAction] = [a for a in self.stored_actions
-                                            if a.priority == priority_lvl]
-            self.stored_actions = [a for a in self.stored_actions
-                                   if a.priority != priority_lvl]
-            if priority_lvl == 0:
-                for a in cur_p_actions:
-                    a.action()
-            elif priority_lvl == 1:
-                for a in cur_p_actions:
-                    if isinstance(a.action, FastMove):
+                    for a in valid_actions:
                         self.attack_queue.append(a)
-            elif priority_lvl == 2:
-                # Check energy requirements for charge moves met
-                valid_actions: List[QAction] = [
-                    a for a in cur_p_actions
-                    if a.player.mon_cur.energy >= abs(a.action.energy)]
-                # TODO: might need cur_p_actions = everything that wasnt valid
-                if len(valid_actions) > 1:
-                    # Resolve CMP ties for charge moves
-                    atk_stats = [p.mon_cur.atk_tot for p in self.players]
-                    if atk_stats[0] == atk_stats[1]:
-                        # If attack stats are the same, random tie-breaker
-                        sort_by = [0, 1]
-                        random.shuffle(sort_by)
-                    else:
-                        sort_by = atk_stats
-                    _, valid_actions = zip(*sorted(
-                        zip(sort_by, valid_actions)))
 
-                for a in valid_actions:
-                    self.attack_queue.append(a)
+            for qa in self.attack_queue:
+                qa.turns_elapsed += 1
 
-        for qa in self.attack_queue:
-            qa.turns_elapsed += 1
-        self.resolve_attacks()
-        # TODO: lower the turns on all the queued attacks now
-        self.turn += 1
+        elif self.state in CHARGE_STATES:
+            pass
+
+        resolved = self.resolve_attacks()
+
+        self.turn += int(resolved)
 
     def get_other_player(self, player: Player) -> Player:
         return self.players[not self.players.index(player)]
@@ -115,35 +123,44 @@ class Battle:
         self.attack_queue = [qa for qa in self.attack_queue
                              if qa.turns_elapsed < qa.action.turns]
 
-        for qa in ready_actions:
-            attacker = qa.player.mon_cur
-            defender = self.get_other_player(qa.player).mon_cur
+        for _ in range(len(ready_actions)):
+            qa = ready_actions.pop()
+            p_attacker = qa.player
+            p_defender = self.get_other_player(p_attacker)
+            mon_attacker = p_attacker.mon_cur
+            mon_defender = p_defender.mon_cur
             move = qa.action
-            # Handle Charge Moves
+            # Handle Charge Move Input (Charge Amt and Shield)
             if isinstance(move, ChargeMove):
-                self.state = [
-                    BattleState.P0_CHARGE_ATK,
-                    BattleState.P1_CHARGE_ATK,
-                ][self.players.index(qa.player)]
-                # charge_amt = yield
-                # use_shield = yield
-                # # TODO: yield???
+                # breakpoint()
+                if self.state not in CHARGE_STATES:
+                    self.state = CHARGE_STATES[self.players.index(qa.player)]
+                    # Return and get player input for charge atk state
+                    # Put the action back in the queue
+                    self.attack_queue += [qa] + ready_actions
+                    return False
 
             # Apply Damage
-            # TODO: Pass in charge amount if charge move
-            dmg = move.get_dmg(attacker, defender)
-            defender.hp_cur -= dmg
+            if p_defender.shield_out:
+                dmg = 1
+                p_defender.shield_out = False
+            else:
+                # TODO: Pass in charge amount of attacker
+                dmg = move.get_dmg(mon_attacker, mon_defender)
+            mon_defender.hp_cur -= dmg
             # Reward Energy
-            attacker.energy += move.energy
-            attacker.energy = min(100, attacker.energy)
+            mon_attacker.energy += move.energy
+            mon_attacker.energy = min(100, mon_attacker.energy)
 
             # Set state back to battle
-            if defender.hp_cur <= 0:
-                self.state = [
-                    BattleState.P1_SWAP_CHOICE,
-                    BattleState.P0_SWAP_CHOICE,
-                ][self.players.index(qa.player)]
-                pass
+            if mon_defender.hp_cur <= 0:
+                # TODO
+                # self.state = [
+                #     BattleState.P1_SWAP_CHOICE,
+                #     BattleState.P0_SWAP_CHOICE,
+                # ][self.players.index(qa.player)]
+                # return False
+                self.state = BattleState.BATTLE
             else:
                 self.state = BattleState.BATTLE
 
@@ -180,10 +197,8 @@ class Battle:
         for p in self.players:
             p.reset()
 
+        self.timer = DURATION_ROUND_SEC
         self.turn = 0
+        self.state = BattleState.BATTLE
         self.stored_actions = []
         self.attack_queue = []
-
-
-
-
