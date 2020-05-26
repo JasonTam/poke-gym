@@ -2,9 +2,11 @@ from dataclasses import dataclass
 from typing import List, Optional
 from pokegym.mon import Monster
 from pokegym.player import Player
-from pokegym.move import FastMove
+from pokegym.move import FastMove, ChargeMove
 from pokegym.gamemaster import combat_settings_d
 from typing import Any
+from enum import Enum
+import random
 
 
 DURATION_ROUND_SEC = combat_settings_d['roundDurationSeconds']
@@ -21,15 +23,23 @@ class QAction:
     turns_elapsed: int = 0
 
 
+class BattleState(Enum):
+    BATTLE = 0
+    P0_CHARGE_ATK = 1
+    P1_CHARGE_ATK = 2
+    # P0_SWAP_CHOICE = 3
+    # P1_SWAP_CHOICE = 4
+
+
 class Battle:
 
     def __init__(self, players=List[Player]):
 
-        self.players = players
+        self.players: List[Player] = players
 
         self.timer: int = DURATION_ROUND_SEC
         self.turn = 0
-        self.state: str  # TODO: this would be... enum/class?
+        self.state: BattleState = BattleState.BATTLE
         self.stored_actions: List[QAction] = []
         self.attack_queue: List[QAction] = []
 
@@ -52,9 +62,10 @@ class Battle:
         """
 
         # TODO: this is messy AF
-        # TODO: actually, the fast move is kind of complicated
-        #   need to queue the damage.....
-        #   The current implementation here is not correct
+
+
+
+
         for priority_lvl in range(3):
             cur_p_actions: List[QAction] = [a for a in self.stored_actions
                                             if a.priority == priority_lvl]
@@ -75,8 +86,15 @@ class Battle:
                 # TODO: might need cur_p_actions = everything that wasnt valid
                 if len(valid_actions) > 1:
                     # Resolve CMP ties for charge moves
-                    atk_stats = [p.current_mon.atk_tot for p in self.players]
-                    _, valid_actions = sorted(zip(atk_stats, valid_actions))
+                    atk_stats = [p.mon_cur.atk_tot for p in self.players]
+                    if atk_stats[0] == atk_stats[1]:
+                        # If attack stats are the same, random tie-breaker
+                        sort_by = [0, 1]
+                        random.shuffle(sort_by)
+                    else:
+                        sort_by = atk_stats
+                    _, valid_actions = zip(*sorted(
+                        zip(sort_by, valid_actions)))
 
                 for a in valid_actions:
                     self.attack_queue.append(a)
@@ -90,7 +108,8 @@ class Battle:
     def get_other_player(self, player: Player) -> Player:
         return self.players[not self.players.index(player)]
 
-    def resolve_attacks(self):
+    def resolve_attacks(self) -> bool:
+        resolved = False
         ready_actions = [qa for qa in self.attack_queue
                          if qa.turns_elapsed >= qa.action.turns]
         self.attack_queue = [qa for qa in self.attack_queue
@@ -100,6 +119,16 @@ class Battle:
             attacker = qa.player.mon_cur
             defender = self.get_other_player(qa.player).mon_cur
             move = qa.action
+            # Handle Charge Moves
+            if isinstance(move, ChargeMove):
+                self.state = [
+                    BattleState.P0_CHARGE_ATK,
+                    BattleState.P1_CHARGE_ATK,
+                ][self.players.index(qa.player)]
+                # charge_amt = yield
+                # use_shield = yield
+                # # TODO: yield???
+
             # Apply Damage
             # TODO: Pass in charge amount if charge move
             dmg = move.get_dmg(attacker, defender)
@@ -107,6 +136,18 @@ class Battle:
             # Reward Energy
             attacker.energy += move.energy
             attacker.energy = min(100, attacker.energy)
+
+            # Set state back to battle
+            if defender.hp_cur <= 0:
+                self.state = [
+                    BattleState.P1_SWAP_CHOICE,
+                    BattleState.P0_SWAP_CHOICE,
+                ][self.players.index(qa.player)]
+                pass
+            else:
+                self.state = BattleState.BATTLE
+
+        return resolved
 
     @property
     def is_done(self):

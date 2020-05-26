@@ -16,31 +16,15 @@ def make_registeel():
         atk_iv=8,
         def_iv=15,
         stm_iv=13,
-        move_fast=MOVES.CONFUSION_FAST,
+        move_fast=MOVES.METAL_CLAW_FAST,
         move_charge_1=MOVES.FLASH_CANNON,
         move_charge_2=MOVES.FOCUS_BLAST,
     )
     return registeel
 
 
-def make_chansey():
-    chansey = Monster(
-        species=POKEMON.CHANSEY,
-        level=40,
-        atk_iv=15,
-        def_iv=15,
-        stm_iv=15,
-        move_fast=MOVES.POUND_FAST,
-        move_charge_1=MOVES.PSYCHIC,
-        move_charge_2=None,
-    )
-    return chansey
-
-
-class EasyEnv(gym.Env):
+class DuelingEnv(gym.Env):
     """
-    Simple Env with set teams, and limited actions
-    The goal of this env is to just keep attacking
 
     Simplified Actions:
     0: Fast Attack
@@ -50,10 +34,13 @@ class EasyEnv(gym.Env):
     """
     metadata = {'render.modes': ['console']}
 
-    def __init__(self):
+    def __init__(self, p1_agent):
+
+        self.p1_agent = p1_agent
+        self.p1_action: int
 
         self.player_0 = Player(mons=[make_registeel()])
-        self.player_1 = Player(mons=[make_chansey()])
+        self.player_1 = Player(mons=[make_registeel()])
         self.battle = Battle(players=[self.player_0, self.player_1])
         self.action_space = spaces.Discrete(4)
 
@@ -63,21 +50,48 @@ class EasyEnv(gym.Env):
         # HACK: (B/C baseline models don't support Dict/Tuple)
         # Enemy HP, Energy -- both unit normalized
         self.observation_space = spaces.Box(
-            low=np.array([0., 0.]),
-            high=np.array([1., 1.]),
+            low=np.array([0., 0., 0., 0.]),
+            high=np.array([1., 1., 1., 1.]),
             dtype=np.float32,
         )
 
-    def step(self, action):
+    def _observations_common(self):
+        """Observations known to both players
+        NOTE: Needs to be flattened later
+        Kept as 2 dimensional to easily flip perspective
+        with np.flip(..., axis=1)
+        """
+        p0_mon = self.player_0.mon_cur
+        p1_mon = self.player_1.mon_cur
 
-        if action == 0:
-            self.player_0.apply_fast_move(self.battle)
-        elif action == 1:
-            self.player_0.apply_charge_move_1(self.battle)
-        elif action == 2:
-            self.player_0.apply_charge_move_2(self.battle)
-        elif action == 3:
-            self.player_0.apply_wait(self.battle)
+        p0_hp_rat = p0_mon.hp_cur / p0_mon.stm_tot
+        p1_hp_rat = p1_mon.hp_cur / p1_mon.stm_tot
+
+        p0_nrg = p0_mon.energy / 100.
+        p1_nrg = p1_mon.energy / 100.
+
+        obs_perspective = np.array([
+            [p0_hp_rat, p1_hp_rat],
+            [p0_nrg, p1_nrg],
+        ], dtype=np.float16)
+        # TODO: charge move state needs to be here too ^
+
+        obs_global = np.array([])
+
+        return obs_perspective
+
+    def step(self, p0_action):
+
+        for p, action in zip([self.player_0, self.player_1],
+                             [p0_action, self.p1_action]):
+            if action == 0:
+                p.apply_fast_move(self.battle)
+            elif action == 1:
+                p.apply_charge_move_1(self.battle)
+            elif action == 2:
+                p.apply_charge_move_2(self.battle)
+            elif action == 3:
+                p.apply_wait(self.battle)
 
         o_hp_0 = self.player_1.mon_cur.hp_cur
         p_nrg_0 = self.player_0.mon_cur.energy
@@ -85,10 +99,9 @@ class EasyEnv(gym.Env):
         o_hp_1 = self.player_1.mon_cur.hp_cur
         p_nrg_1 = self.player_0.mon_cur.energy
 
-        observation = np.array([
-            self.player_1.mon_cur.hp_cur / self.player_1.mon_cur.stm_tot,
-            self.player_0.mon_cur.energy / 100.,
-        ], dtype=np.float16)
+        common_obs = self._observations_common()
+        p0_obs = common_obs.flatten()
+        p1_obs = np.flip(common_obs, axis=1).flatten()
 
         done = self.battle.is_done
 
@@ -108,21 +121,35 @@ class EasyEnv(gym.Env):
         # Optionally we can pass additional info, we are not using that for now
         info = {}
 
-        return observation, reward, done, info
+        # This is our opponent's move for next turn
+        self.p1_action, _ = self.p1_agent.predict(p1_obs)
+
+        return p0_obs, reward, done, info
 
     def reset(self):
         self.battle.reset()
 
-        observation = np.array([
-            self.player_1.mon_cur.hp_cur / self.player_1.mon_cur.stm_tot,
-            self.player_0.mon_cur.energy / 100.,
-        ], dtype=np.float16)
+        common_obs = self._observations_common()
+        p0_obs = common_obs.flatten()
+        p1_obs = np.flip(common_obs, axis=1).flatten()
 
-        return observation
+        # This is our opponent's move for next turn
+        self.p1_action, _ = self.p1_agent.predict(p1_obs)
+
+        return p0_obs
 
     def render(self, mode='console'):
-        print(f'{self.player_1.mon_cur.hp_cur}/'
-              f'{self.player_1.mon_cur.stm_tot}')
+        p0_mon = self.player_0.mon_cur
+        p1_mon = self.player_1.mon_cur
+        p0_hp = f'HP: {p0_mon.hp_cur}/' \
+                f'{p0_mon.stm_tot}'
+        p0_nrg = f'E: {p0_mon.energy}'
+        p1_hp = f'HP: {p1_mon.hp_cur}/' \
+                f'{p1_mon.stm_tot}'
+        p1_nrg = f'E: {p1_mon.energy}'
+
+        print(p0_hp, p1_hp, sep='\t')
+        print(p0_nrg, p1_nrg, sep='\t')
 
     def close(self):
         # Clean-up
@@ -133,7 +160,14 @@ if __name__ == '__main__':
     from stable_baselines.common.env_checker import check_env
     from stable_baselines import DQN, PPO2, A2C, ACKTR
 
-    env = EasyEnv()
+    class ShittyAgent:
+        def predict(self, obs):
+            return np.random.randint(4), None
+
+    # opponent = ShittyAgent()
+    opponent = ACKTR.load('./saved/shit.p')
+
+    env = DuelingEnv(opponent)
 
     check_env(env, warn=True)
 
@@ -148,7 +182,7 @@ if __name__ == '__main__':
         action, _ = model.predict(obs, deterministic=True)
         action_history.append(action)
         print("Step {}".format(step + 1))
-        print("Action: ", action)
+        print(f"P0_Action: {action} \t P1_Action: {env.p1_action}")
         obs, reward, done, info = env.step(action)
         print('obs=', obs, 'reward=', reward, 'done=', done)
         env.render(mode='console')

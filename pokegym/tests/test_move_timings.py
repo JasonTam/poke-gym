@@ -125,6 +125,38 @@ def test_charge_move():
     assert p1.mon_cur.hp_cur == hp_before_cm_1 - 73
 
 
+def test_charge_cmp_tie():
+
+    def make_registeel():
+        registeel = Monster(
+            species=POKEMON.REGISTEEL,
+            level=22.5,
+            atk_iv=8,
+            def_iv=15,
+            stm_iv=13,
+            move_fast=MOVES.LOCK_ON_FAST,
+            move_charge_1=MOVES.FLASH_CANNON,
+            move_charge_2=None,
+        )
+        return registeel
+
+    p0 = Player(mons=[make_registeel()])
+    p1 = Player(mons=[make_registeel()])
+    hp_start_0 = p0.mon_cur.hp_cur
+    hp_start_1 = p1.mon_cur.hp_cur
+    b = Battle(players=[p0, p1])
+
+    for turn in range(1, 15 + 1):
+        p0.apply_fast_move(b)
+        p1.apply_fast_move(b)
+        b.resolve_actions()
+
+    hp_before_cm_1 = p1.mon_cur.hp_cur
+    p0.apply_charge_move_1(b)
+    p1.apply_charge_move_1(b)
+    b.resolve_actions()
+
+
 if __name__ == '__main__':
     test_fast_move_duration()
     test_charge_move()
