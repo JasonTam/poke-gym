@@ -1,7 +1,7 @@
 from pokegym.player import Player
 from pokegym.mon import Monster, POKEMON
 from pokegym.move import MOVES
-from pokegym.battle import Battle
+from pokegym.battle import Battle, BattleState
 
 
 def test_fast_move_duration():
@@ -127,7 +127,7 @@ def test_charge_move():
     assert p1.mon_cur.hp_cur == hp_before_cm_1
 
     # Now we need input for attacker charge amt and defender shield
-    p1.apply_shield()
+    p1.apply_shield(b)
     # TODO: p0 charge amount
     b.resolve_actions()
     assert p0.mon_cur.energy == 75 - 65
@@ -166,19 +166,34 @@ def test_charge_cmp_tie():
     p1.apply_charge_move_1(b)
     b.resolve_actions()
 
-    p0.apply_shield()
-    # TODO: p1 charge amount
-    b.resolve_actions()
+    if b.state == BattleState.P1_CHARGE_ATK:
+        p0.apply_shield(b)
+        # TODO: p1 charge amount
+        b.resolve_actions()
 
-    assert p0.mon_cur.hp_cur == 112
-    assert p1.mon_cur.hp_cur == 113
+        assert p0.mon_cur.hp_cur == 113 - 1
+        assert p1.mon_cur.hp_cur == 113
 
-    # TODO: p0 charge amount
-    # p1 does not shield
-    b.resolve_actions()
+        # TODO: p0 charge amount
+        # p1 does not shield
+        b.resolve_actions()
 
-    assert p0.mon_cur.hp_cur == 112
-    assert p1.mon_cur.hp_cur == 113 - 27
+        assert p0.mon_cur.hp_cur == 113 - 1
+        assert p1.mon_cur.hp_cur == 113 - 27
+    elif b.state == BattleState.P0_CHARGE_ATK:
+        # TODO: p0 charge amount
+        # p1 does not shield
+        b.resolve_actions()
+
+        assert p0.mon_cur.hp_cur == 113
+        assert p1.mon_cur.hp_cur == 113 - 27
+
+        p0.apply_shield(b)
+        # TODO: p1 charge amount
+        b.resolve_actions()
+
+        assert p0.mon_cur.hp_cur == 113 - 1
+        assert p1.mon_cur.hp_cur == 113 - 27
 
 
 if __name__ == '__main__':
