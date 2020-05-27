@@ -1,9 +1,10 @@
 
 # TODO
 
-- [ ] Fix tiebreaker to be HP percentage -- not total HP
-- [ ] Extend basic env to 2 competing agents
-- [ ] Implement shield state & logic
+
+- [ ] Write test for dueling env
+    - Test charge move logic more in-depth 
+        (seems like there is sometimes 1 step of battle between cmp ties)
 - [ ] Implement timer
 - [ ] Handle Charge amount
 - [ ] (De)Buffs
@@ -18,6 +19,7 @@
 - [ ] Figure out exact swap mechanics
     - Do the opponents (fast/charge) moves apply to 
     the mon you previously had out, or the one you swapped to?
+- [ ] 1 Agent to choose team, another agent to play the match
  
  
 Observations:
