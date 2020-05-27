@@ -3,7 +3,7 @@ from typing import List, TYPE_CHECKING
 from pokegym.mon import Monster
 from pokegym.gamemaster import combat_settings_d
 if TYPE_CHECKING:
-    from pokegym.battle import Battle
+    from pokegym.battle import Battle, CHARGE_STATES
 
 DURATION_SWAP_CD_SEC = combat_settings_d['quickSwapCooldownDurationSeconds']
 
@@ -61,10 +61,8 @@ class Player:
     def apply_wait(self, b: 'Battle'):
         b.store_action(self, lambda: None, 0)
 
-    def apply_shield(self):
-        if self.n_shields > 0:
-            self.n_shields -= 1
-            self.shield_out = True
+    def apply_shield(self, b: 'Battle'):
+        b.apply_shield(self)
 
     def reset(self):
         for mon in self.mons:

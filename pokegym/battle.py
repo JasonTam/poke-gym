@@ -56,6 +56,13 @@ class Battle:
         else:
             self.stored_actions.append(QAction(p, action, priority, 0))
 
+    def apply_shield(self, p: Player):
+        if (p.n_shields > 0) and \
+                (self.state == CHARGE_STATES[
+                    self.players.index(self.get_other_player(p))]):
+            p.n_shields -= 1
+            p.shield_out = True
+
     def resolve_actions(self):
         """Logic for resolving actions in correct order
         Priority:
@@ -124,7 +131,7 @@ class Battle:
                              if qa.turns_elapsed < qa.action.turns]
 
         for _ in range(len(ready_actions)):
-            qa = ready_actions.pop()
+            qa = ready_actions.pop(0)
             p_attacker = qa.player
             p_defender = self.get_other_player(p_attacker)
             mon_attacker = p_attacker.mon_cur
@@ -132,9 +139,10 @@ class Battle:
             move = qa.action
             # Handle Charge Move Input (Charge Amt and Shield)
             if isinstance(move, ChargeMove):
-                # breakpoint()
-                if self.state not in CHARGE_STATES:
-                    self.state = CHARGE_STATES[self.players.index(qa.player)]
+                charge_state = CHARGE_STATES[self.players.index(qa.player)]
+                if self.state != charge_state:
+                    # Initiate state change
+                    self.state = charge_state
                     # Return and get player input for charge atk state
                     # Put the action back in the queue
                     self.attack_queue += [qa] + ready_actions
@@ -163,12 +171,19 @@ class Battle:
                 self.state = BattleState.BATTLE
             else:
                 self.state = BattleState.BATTLE
+        else:
+            # No ready actions
+            self.state = BattleState.BATTLE
 
         return resolved
 
     @property
     def is_done(self):
         return not (all(p.is_alive for p in self.players) and (self.timer > 0))
+
+    @property
+    def is_in_charge_state(self):
+        return self.state in CHARGE_STATES
 
     def post_turn(self):
         # Resolve actions

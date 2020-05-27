@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore")
+
 import numpy as np
 import pandas as pd
 import gym
@@ -112,7 +115,7 @@ class DuelingEnv(gym.Env):
             elif action == 3:
                 p.apply_wait(self.battle)
             elif action == 4:
-                p.apply_shield()
+                p.apply_shield(self.battle)
 
         o_hp_0 = self.player_1.mon_cur.hp_cur
         p_nrg_0 = self.player_0.mon_cur.energy
@@ -131,7 +134,10 @@ class DuelingEnv(gym.Env):
         # Realized energy
         if self.battle.is_done:
             if self.battle.get_winner() == self.player_0:
-                reward = 10 * (270 - self.battle.turn * 0.5)
+                reward = 10 * (
+                        270 - self.battle.turn * 0.5
+                        + self.player_0.mon_cur.hp_cur
+                )
             else:
                 reward = 0
         else:
@@ -201,18 +207,26 @@ if __name__ == '__main__':
         check_env(env, warn=True)
 
         # Train the agent
-        model = ACKTR('MlpPolicy', env, verbose=0).learn(20_000)
+        n_training_steps = 20_000
+        # n_training_steps = 100
+        model = ACKTR('MlpPolicy', env, verbose=0).learn(n_training_steps)
 
         # Test the trained agent
         obs = env.reset()
         n_steps = 300
         action_history = []
+        summary_l = []
         for step in range(n_steps):
             action, _ = model.predict(obs, deterministic=True)
             action_history.append(action)
             print("Step {}".format(step + 1))
             print(f"P0_Action: {action} \t P1_Action: {env.p1_action}")
             obs, reward, done, info = env.step(action)
+            summary_l.append(
+                [env.battle.state.name] +
+                list(obs) +
+                [action, env.p1_action, reward, done]
+            )
             print('obs=', obs, 'reward=', reward, 'done=', done)
             env.render(mode='console')
             if done:
@@ -227,5 +241,23 @@ if __name__ == '__main__':
 
         print('Saving Model')
         model.save(PATH_SAVE)
+
+        pd.options.display.max_rows = 300
+        summary_df = pd.DataFrame(
+            summary_l,
+            columns=[
+                'state',
+                'hp0', 'hp1',
+                'nrg0', 'nrg1',
+                'shields0', 'shields1',
+                'is_charge0', 'is_charge1',
+                'is_battle',
+                'ACTION0', 'ACTION1',
+                'REWARD', 'DONE',
+            ]
+        )
+        print(summary_df)
+
+        summary_df.to_csv(f'./saved/{epoch}.csv')
 
 
